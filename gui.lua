@@ -1,6 +1,6 @@
 --[[
 ════════════════════════════════════════════════════
-  Gui.lua  —  WindUI-style ImGui builder
+  Gui.lua  —  WindUI-style ImGui builder (FIXED)
   
   local Gui = require("Gui")
   
@@ -73,13 +73,15 @@ local Themes = {
             [ImGui.Col.TabActive]      = { 0.24, 0.24, 0.32, 1.0 },
         },
         vars = {
+            -- Single value StyleVars
             [ImGui.StyleVar.WindowRounding] = 8,
             [ImGui.StyleVar.FrameRounding]  = 5,
             [ImGui.StyleVar.GrabRounding]   = 5,
             [ImGui.StyleVar.TabRounding]    = 4,
-            [ImGui.StyleVar.WindowPadding]  = {10, 10},
-            [ImGui.StyleVar.FramePadding]   = {6, 4},
-            [ImGui.StyleVar.ItemSpacing]    = {8, 6},
+            -- Vec2 StyleVars - commented out, adjust based on your binding
+            -- [ImGui.StyleVar.WindowPadding]  = {10, 10},
+            -- [ImGui.StyleVar.FramePadding]   = {6, 4},
+            -- [ImGui.StyleVar.ItemSpacing]    = {8, 6},
         }
     },
 
@@ -112,9 +114,6 @@ local Themes = {
             [ImGui.StyleVar.FrameRounding]  = 6,
             [ImGui.StyleVar.GrabRounding]   = 6,
             [ImGui.StyleVar.TabRounding]    = 5,
-            [ImGui.StyleVar.WindowPadding]  = {12, 12},
-            [ImGui.StyleVar.FramePadding]   = {7, 5},
-            [ImGui.StyleVar.ItemSpacing]    = {8, 7},
         }
     },
 
@@ -147,9 +146,6 @@ local Themes = {
             [ImGui.StyleVar.FrameRounding]  = 4,
             [ImGui.StyleVar.GrabRounding]   = 4,
             [ImGui.StyleVar.TabRounding]    = 3,
-            [ImGui.StyleVar.WindowPadding]  = {10, 10},
-            [ImGui.StyleVar.FramePadding]   = {6, 4},
-            [ImGui.StyleVar.ItemSpacing]    = {8, 6},
         }
     },
 
@@ -181,13 +177,11 @@ local Themes = {
             [ImGui.StyleVar.FrameRounding]  = 4,
             [ImGui.StyleVar.GrabRounding]   = 4,
             [ImGui.StyleVar.TabRounding]    = 4,
-            [ImGui.StyleVar.WindowPadding]  = {10, 10},
-            [ImGui.StyleVar.FramePadding]   = {6, 4},
-            [ImGui.StyleVar.ItemSpacing]    = {8, 6},
         }
     },
 }
 
+-- FIXED: applyTheme function - only apply single-value StyleVars
 local function applyTheme(theme_name)
     local t = Themes[theme_name]
     if not t then return 0, 0 end
@@ -200,12 +194,14 @@ local function applyTheme(theme_name)
     end
     if t.vars then
         for id, v in pairs(t.vars) do
-            if type(v) == "table" then
-                ImGui.PushStyleVar(id, v[1], v[2])
-            else
+            -- Only push single-value StyleVars (float/int)
+            -- Vec2 StyleVars are commented out in themes above
+            if type(v) == "number" then
                 ImGui.PushStyleVar(id, v)
+                nv = nv + 1
             end
-            nv = nv + 1
+            -- If you need Vec2 support, check your binding documentation
+            -- Some bindings might use: ImGui.PushStyleVar(id, ImVec2(x, y))
         end
     end
     return nc, nv
@@ -222,7 +218,7 @@ Element.__index = Element
 
 function Element:Text(text, ...)
     if select("#", ...) > 0 then
-        ImGui.Text(string.format(tostring(text), ...))
+        ImGui.Text(string.format(text, ...))
     else
         ImGui.Text(tostring(text))
     end
@@ -231,42 +227,385 @@ end
 
 function Element:TextColored(r, g, b, a, text, ...)
     if select("#", ...) > 0 then
-        ImGui.TextColored(r, g, b, a, string.format(tostring(text), ...))
+        ImGui.TextColored(r, g, b, a, string.format(text, ...))
     else
         ImGui.TextColored(r, g, b, a, tostring(text))
     end
     return self
 end
 
-function Element:TextDisabled(text) ImGui.TextDisabled(tostring(text)) return self end
-function Element:TextWrapped(text)  ImGui.TextWrapped(tostring(text))  return self end
-function Element:BulletText(text)   ImGui.BulletText(tostring(text))   return self end
-function Element:LabelText(lbl, v)  ImGui.LabelText(lbl, tostring(v))  return self end
-
--- ── Layout helpers
-
-function Element:Separator(label)
-    if label then ImGui.SeparatorText(label) else ImGui.Separator() end
+function Element:TextDisabled(text)
+    ImGui.TextDisabled(tostring(text))
     return self
 end
 
-function Element:Spacing(n)
-    for _ = 1, (n or 1) do ImGui.Spacing() end
+function Element:TextWrapped(text)
+    ImGui.TextWrapped(tostring(text))
     return self
 end
 
-function Element:NewLine(n)
-    for _ = 1, (n or 1) do ImGui.NewLine() end
+function Element:LabelText(label, text)
+    ImGui.LabelText(label, tostring(text))
     return self
 end
+
+function Element:BulletText(text)
+    ImGui.BulletText(tostring(text))
+    return self
+end
+
+-- ── Buttons
+
+function Element:Button(cfg, callback)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    callback = callback or cfg.callback
+    local w = cfg.width or cfg.w or 0
+    local h = cfg.height or cfg.h or 0
+    if ImGui.Button(cfg.label or cfg[1] or "Button", w, h) then
+        if callback then callback(self) end
+    end
+    return self
+end
+
+function Element:SmallButton(label, callback)
+    if ImGui.SmallButton(label) then
+        if callback then callback(self) end
+    end
+    return self
+end
+
+function Element:InvisibleButton(cfg, callback)
+    if type(cfg) == "string" then cfg = { id = cfg } end
+    callback = callback or cfg.callback
+    local w = cfg.width or cfg.w or 100
+    local h = cfg.height or cfg.h or 20
+    if ImGui.InvisibleButton(cfg.id or cfg.label or "##inv", w, h) then
+        if callback then callback(self) end
+    end
+    return self
+end
+
+function Element:ArrowButton(id, dir, callback)
+    if ImGui.ArrowButton(id, dir or ImGui.Dir.Right) then
+        if callback then callback(self) end
+    end
+    return self
+end
+
+function Element:RadioButton(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg, id = cfg } end
+    local id  = cfg.id or cfg.label or "radio"
+    local sid = uid(self._win, id)
+    local val = stateGet(sid, "v", cfg.value or 0)
+    local chk = stateGet(sid, "choice", cfg.choice or 0)
+    if ImGui.RadioButton(cfg.label or cfg[1] or "Radio", chk == val) then
+        stateSet(sid, "choice", val)
+        if cfg.callback then cfg.callback(val) end
+    end
+    return self
+end
+
+-- ── Checkbox / Toggle
+
+function Element:Checkbox(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "Checkbox"
+    local sid = uid(self._win, label)
+    local val = stateGet(sid, "v", cfg.default or false)
+    local changed, new = ImGui.Checkbox(label, val)
+    if changed then
+        stateSet(sid, "v", new)
+        if cfg.callback then cfg.callback(new) end
+    end
+    return self
+end
+
+-- ── Input fields
+
+function Element:InputText(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "##input"
+    local sid = uid(self._win, label)
+    local val = stateGet(sid, "v", cfg.default or "")
+    local changed, new = ImGui.InputText(label, val, cfg.flags or 0)
+    if changed then
+        stateSet(sid, "v", new)
+        if cfg.callback then cfg.callback(new) end
+    end
+    return self
+end
+
+function Element:InputTextWithHint(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "##inputhint"
+    local sid = uid(self._win, label)
+    local val = stateGet(sid, "v", cfg.default or "")
+    local changed, new = ImGui.InputTextWithHint(label, cfg.hint or "", val, cfg.flags or 0)
+    if changed then
+        stateSet(sid, "v", new)
+        if cfg.callback then cfg.callback(new) end
+    end
+    return self
+end
+
+function Element:InputTextMultiline(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "##textarea"
+    local sid = uid(self._win, label)
+    local val = stateGet(sid, "v", cfg.default or "")
+    local w = cfg.width or cfg.w or 0
+    local h = cfg.height or cfg.h or 0
+    local changed, new = ImGui.InputTextMultiline(label, val, w, h, cfg.flags or 0)
+    if changed then
+        stateSet(sid, "v", new)
+        if cfg.callback then cfg.callback(new) end
+    end
+    return self
+end
+
+function Element:InputInt(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "##int"
+    local sid = uid(self._win, label)
+    local val = stateGet(sid, "v", cfg.default or 0)
+    local changed, new = ImGui.InputInt(label, val)
+    if changed then
+        stateSet(sid, "v", new)
+        if cfg.callback then cfg.callback(new) end
+    end
+    return self
+end
+
+function Element:InputFloat(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "##float"
+    local sid = uid(self._win, label)
+    local val = stateGet(sid, "v", cfg.default or 0.0)
+    local changed, new = ImGui.InputFloat(label, val)
+    if changed then
+        stateSet(sid, "v", new)
+        if cfg.callback then cfg.callback(new) end
+    end
+    return self
+end
+
+-- ── Sliders
+
+function Element:SliderInt(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "##sliderint"
+    local sid = uid(self._win, label)
+    local val = stateGet(sid, "v", cfg.default or 0)
+    local changed, new = ImGui.SliderInt(label, val, cfg.min or 0, cfg.max or 100)
+    if changed then
+        stateSet(sid, "v", new)
+        if cfg.callback then cfg.callback(new) end
+    end
+    return self
+end
+
+function Element:SliderFloat(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "##sliderfloat"
+    local sid = uid(self._win, label)
+    local val = stateGet(sid, "v", cfg.default or 0.0)
+    local changed, new = ImGui.SliderFloat(label, val, cfg.min or 0.0, cfg.max or 1.0)
+    if changed then
+        stateSet(sid, "v", new)
+        if cfg.callback then cfg.callback(new) end
+    end
+    return self
+end
+
+function Element:SliderAngle(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "##angle"
+    local sid = uid(self._win, label)
+    local val = stateGet(sid, "v", cfg.default or 0.0)
+    local changed, new = ImGui.SliderAngle(label, val, cfg.min or -360, cfg.max or 360)
+    if changed then
+        stateSet(sid, "v", new)
+        if cfg.callback then cfg.callback(new) end
+    end
+    return self
+end
+
+-- ── Drag
+
+function Element:DragInt(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "##dragint"
+    local sid = uid(self._win, label)
+    local val = stateGet(sid, "v", cfg.default or 0)
+    local changed, new = ImGui.DragInt(label, val, cfg.speed or 1, cfg.min or 0, cfg.max or 100)
+    if changed then
+        stateSet(sid, "v", new)
+        if cfg.callback then cfg.callback(new) end
+    end
+    return self
+end
+
+function Element:DragFloat(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "##dragfloat"
+    local sid = uid(self._win, label)
+    local val = stateGet(sid, "v", cfg.default or 0.0)
+    local changed, new = ImGui.DragFloat(label, val, cfg.speed or 0.1, cfg.min or 0.0, cfg.max or 1.0)
+    if changed then
+        stateSet(sid, "v", new)
+        if cfg.callback then cfg.callback(new) end
+    end
+    return self
+end
+
+-- ── Color picker
+
+function Element:ColorEdit4(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "##color"
+    local sid = uid(self._win, label)
+    local r = stateGet(sid, "r", cfg.r or 1.0)
+    local g = stateGet(sid, "g", cfg.g or 1.0)
+    local b = stateGet(sid, "b", cfg.b or 1.0)
+    local a = stateGet(sid, "a", cfg.a or 1.0)
+    local changed, nr, ng, nb, na = ImGui.ColorEdit4(label, r, g, b, a, cfg.flags or 0)
+    if changed then
+        stateSet(sid, "r", nr)
+        stateSet(sid, "g", ng)
+        stateSet(sid, "b", nb)
+        stateSet(sid, "a", na)
+        if cfg.callback then cfg.callback(nr, ng, nb, na) end
+    end
+    return self
+end
+
+function Element:ColorButton(cfg)
+    if type(cfg) == "string" then cfg = { id = cfg } end
+    local id = cfg.id or "##colorbtn"
+    local r, g, b, a = cfg.r or 1, cfg.g or 1, cfg.b or 1, cfg.a or 1
+    local w = cfg.width or cfg.w or 0
+    local h = cfg.height or cfg.h or 0
+    if ImGui.ColorButton(id, r, g, b, a, cfg.flags or 0, w, h) then
+        if cfg.callback then cfg.callback(r, g, b, a) end
+    end
+    return self
+end
+
+-- ── Combo
+
+function Element:Combo(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "##combo"
+    local sid = uid(self._win, label)
+    local idx = stateGet(sid, "v", cfg.default or 0)
+    local items = cfg.items or {}
+    local preview = (idx >= 0 and idx < #items) and items[idx+1] or ""
+    if ImGui.BeginCombo(label, preview, cfg.flags or 0) then
+        for i, item in ipairs(items) do
+            local selected = (i - 1) == idx
+            if ImGui.Selectable(item, selected) then
+                stateSet(sid, "v", i - 1)
+                if cfg.callback then cfg.callback(i - 1, item) end
+            end
+            if selected then
+                ImGui.SetItemDefaultFocus()
+            end
+        end
+        ImGui.EndCombo()
+    end
+    return self
+end
+
+-- ── List box
+
+function Element:ListBox(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "##list"
+    local sid = uid(self._win, label)
+    local idx = stateGet(sid, "v", cfg.default or 0)
+    local items = cfg.items or {}
+    local h = cfg.height or cfg.h or -1
+    if ImGui.BeginListBox(label, 0, h) then
+        for i, item in ipairs(items) do
+            local selected = (i - 1) == idx
+            if ImGui.Selectable(item, selected) then
+                stateSet(sid, "v", i - 1)
+                if cfg.callback then cfg.callback(i - 1, item) end
+            end
+            if selected then
+                ImGui.SetItemDefaultFocus()
+            end
+        end
+        ImGui.EndListBox()
+    end
+    return self
+end
+
+-- ── Tree / Collapsing
+
+function Element:TreeNode(cfg, fn)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    fn = fn or cfg.OnRender
+    if ImGui.TreeNode(cfg.label or cfg[1] or "Node") then
+        if fn then fn(self) end
+        ImGui.TreePop()
+    end
+    return self
+end
+
+function Element:CollapsingHeader(cfg, fn)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    fn = fn or cfg.OnRender
+    if ImGui.CollapsingHeader(cfg.label or cfg[1] or "Header", cfg.flags or 0) then
+        if fn then fn(self) end
+    end
+    return self
+end
+
+-- ── Selectable
+
+function Element:Selectable(cfg)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    local label = cfg.label or cfg[1] or "Item"
+    local sid = uid(self._win, label)
+    local sel = stateGet(sid, "v", cfg.selected or false)
+    local changed, new = ImGui.Selectable(label, sel, cfg.flags or 0)
+    if changed then
+        stateSet(sid, "v", new)
+        if cfg.callback then cfg.callback(new) end
+    end
+    return self
+end
+
+-- ── Layout
 
 function Element:SameLine(offset, spacing)
     ImGui.SameLine(offset or 0, spacing or -1)
     return self
 end
 
+function Element:NewLine()
+    ImGui.NewLine()
+    return self
+end
+
+function Element:Spacing()
+    ImGui.Spacing()
+    return self
+end
+
 function Element:Dummy(w, h)
     ImGui.Dummy(w or 0, h or 0)
+    return self
+end
+
+function Element:Separator()
+    ImGui.Separator()
+    return self
+end
+
+function Element:SeparatorText(text)
+    ImGui.SeparatorText(text or "")
     return self
 end
 
@@ -280,267 +619,45 @@ function Element:Unindent(w)
     return self
 end
 
-function Element:Width(w, fn)
-    ImGui.PushItemWidth(w)
-    if fn then fn(self) end
-    ImGui.PopItemWidth()
-    return self
-end
-
-function Element:ProgressBar(frac, w, h, overlay)
-    ImGui.ProgressBar(frac, w or -1, h or 0, overlay or "")
-    return self
-end
-
--- ── Button
-
-function Element:Button(cfg)
-    -- cfg: string | { label, w, h, color, callback }
-    if type(cfg) == "string" then cfg = { label = cfg } end
-    local label    = cfg.label or cfg[1] or "Button"
-    local clicked  = ImGui.Button(label, cfg.w or 0, cfg.h or 0)
-    local hovered  = ImGui.IsItemHovered()
-    if clicked and cfg.callback then cfg.callback() end
-    if hovered and cfg.tooltip  then
-        ImGui.BeginTooltip()
-        ImGui.Text(cfg.tooltip)
-        ImGui.EndTooltip()
-    end
-    return self
-end
-
-function Element:SmallButton(cfg)
-    if type(cfg) == "string" then cfg = { label = cfg } end
-    local label = cfg.label or cfg[1] or "Button"
-    if ImGui.SmallButton(label) and cfg.callback then cfg.callback() end
-    return self
-end
-
--- ── Checkbox  (stateful)
-
-function Element:Checkbox(cfg)
-    -- cfg: string | { label, id, default, callback }
-    if type(cfg) == "string" then cfg = { label = cfg } end
-    local label   = cfg.label or cfg[1] or "Checkbox"
-    local sid     = uid(self._win, cfg.id or label)
-    local val     = stateGet(sid, "v", cfg.default or false)
-    local nval    = ImGui.Checkbox(label, val)
-    if nval ~= val then
-        stateSet(sid, "v", nval)
-        if cfg.callback then cfg.callback(nval) end
-    end
-    return self
-end
-
--- ── Toggle  (same as Checkbox, WindUI naming)
-
-function Element:Toggle(cfg)
-    return self:Checkbox(cfg)
-end
-
--- ── Radio  (stateful, group by id)
-
-function Element:Radio(cfg)
-    -- cfg: { label, group_id, value, callback }
-    local label    = cfg.label or cfg[1] or "Radio"
-    local sid      = uid(self._win, cfg.group_id or "radio")
-    local cur      = stateGet(sid, "v", cfg.default or 0)
-    local opt      = cfg.value or 0
-    if ImGui.RadioButton(label, cur == opt) then
-        stateSet(sid, "v", opt)
-        if cfg.callback then cfg.callback(opt) end
-    end
-    return self
-end
-
--- ── Input  (stateful)
-
-function Element:Input(cfg)
-    if type(cfg) == "string" then cfg = { label = cfg } end
-    local label  = cfg.label or cfg[1] or "Input"
-    local sid    = uid(self._win, cfg.id or label)
-    local val    = stateGet(sid, "v", cfg.default or "")
-    local flags  = cfg.flags or 0
-    local nval, changed
-    if cfg.multiline then
-        nval, changed = ImGui.InputTextMultiline(label, val, cfg.buf or 2048,
-            cfg.w or -1, cfg.h or 80, flags)
-    elseif cfg.hint then
-        nval, changed = ImGui.InputTextWithHint(label, cfg.hint, val, cfg.buf or 256, flags)
-    else
-        nval, changed = ImGui.InputText(label, val, cfg.buf or 256, flags)
-    end
-    if changed then
-        stateSet(sid, "v", nval)
-        if cfg.callback then cfg.callback(nval) end
-    end
-    return self
-end
-
--- ── Slider  (stateful)
-
-function Element:Slider(cfg)
-    -- cfg: { label, id, type="float"|"int", min, max, default, fmt, callback }
-    local label  = cfg.label or cfg[1] or "Slider"
-    local sid    = uid(self._win, cfg.id or label)
-    local isInt  = cfg.type == "int"
-    local min    = cfg.min or 0
-    local max    = cfg.max or (isInt and 100 or 1.0)
-    local val    = stateGet(sid, "v", cfg.default or min)
-    local nval, changed
-    if isInt then
-        nval, changed = ImGui.SliderInt(label, val, min, max, cfg.fmt or "%d")
-    else
-        nval, changed = ImGui.SliderFloat(label, val, min, max, cfg.fmt or "%.2f")
-    end
-    if changed then
-        stateSet(sid, "v", nval)
-        if cfg.callback then cfg.callback(nval) end
-    end
-    return self
-end
-
--- ── Drag  (stateful)
-
-function Element:Drag(cfg)
-    local label  = cfg.label or cfg[1] or "Drag"
-    local sid    = uid(self._win, cfg.id or label)
-    local isInt  = cfg.type == "int"
-    local val    = stateGet(sid, "v", cfg.default or 0)
-    local nval, changed
-    if isInt then
-        nval, changed = ImGui.DragInt(label, val, cfg.speed or 1,
-            cfg.min or 0, cfg.max or 0)
-    else
-        nval, changed = ImGui.DragFloat(label, val, cfg.speed or 1.0,
-            cfg.min or 0.0, cfg.max or 0.0, cfg.fmt or "%.2f")
-    end
-    if changed then
-        stateSet(sid, "v", nval)
-        if cfg.callback then cfg.callback(nval) end
-    end
-    return self
-end
-
--- ── Combo / Dropdown  (stateful)
-
-function Element:Combo(cfg)
-    local label   = cfg.label or cfg[1] or "Combo"
-    local items   = cfg.items or cfg.values or {}
-    local sid     = uid(self._win, cfg.id or label)
-    local idx     = stateGet(sid, "v", cfg.default or 0)
-    local preview = items[idx + 1] or ""
-    if ImGui.BeginCombo(label, preview, cfg.flags or 0) then
-        for i, item in ipairs(items) do
-            local sel = (i - 1) == idx
-            if ImGui.Selectable(item, sel) then
-                stateSet(sid, "v", i - 1)
-                if cfg.callback then cfg.callback(item, i - 1) end
-            end
-            if sel then ImGui.SetItemDefaultFocus() end
-        end
-        ImGui.EndCombo()
-    end
-    return self
-end
-
-function Element:Dropdown(cfg) return self:Combo(cfg) end
-
--- ── ColorEdit  (stateful)
-
-function Element:ColorEdit(cfg)
-    if type(cfg) == "string" then cfg = { label = cfg } end
-    local label = cfg.label or cfg[1] or "Color"
-    local sid   = uid(self._win, cfg.id or label)
-    local r     = stateGet(sid, "r", cfg.r or 1.0)
-    local g     = stateGet(sid, "g", cfg.g or 1.0)
-    local b     = stateGet(sid, "b", cfg.b or 1.0)
-    local a     = stateGet(sid, "a", cfg.a or 1.0)
-    local nr, ng, nb, na, changed = ImGui.ColorEdit4(label, r, g, b, a, cfg.flags or 0)
-    if changed then
-        stateSet(sid, "r", nr) stateSet(sid, "g", ng)
-        stateSet(sid, "b", nb) stateSet(sid, "a", na)
-        if cfg.callback then cfg.callback(nr, ng, nb, na) end
-    end
-    return self
-end
-
-function Element:Colorpicker(cfg) return self:ColorEdit(cfg) end
-
--- ── Collapsing / Tree
-
-function Element:Collapsing(cfg, fn)
-    if type(cfg) == "string" then cfg = { label = cfg } end
-    local label = cfg.label or cfg[1] or "Header"
-    fn = fn or cfg.OnRender or cfg.callback
-    if ImGui.CollapsingHeader(label, cfg.flags or 0) then
-        if fn then fn(self) end
-    end
-    return self
-end
-
-function Element:Tree(cfg, fn)
-    if type(cfg) == "string" then cfg = { label = cfg } end
-    local label = cfg.label or cfg[1] or "Tree"
-    fn = fn or cfg.OnRender or cfg.callback
-    if ImGui.TreeNodeEx(label, cfg.flags or 0) then
-        if fn then fn(self) end
-        ImGui.TreePop()
-    end
-    return self
-end
-
--- ── Group  (returns a sub-element that shares state with parent win)
-
-function Element:Group(fn)
+function Element:BeginGroup()
     ImGui.BeginGroup()
-    if type(fn) == "function" then fn(self) end
+    return self
+end
+
+function Element:EndGroup()
     ImGui.EndGroup()
     return self
 end
 
--- ── Section  (CollapsingHeader or just a labeled block)
+-- ── Tab bar
 
-function Element:Section(cfg, fn)
-    if type(cfg) == "string" then cfg = { label = cfg } end
-    local label    = cfg.label or cfg[1] or ""
+function Element:TabBar(cfg, fn)
+    if type(cfg) == "string" then cfg = { id = cfg } end
     fn = fn or cfg.OnRender
-    if cfg.collapsible then
-        if ImGui.CollapsingHeader(label) then
-            if fn then fn(self) end
-        end
-    else
-        ImGui.SeparatorText(label)
+    if ImGui.BeginTabBar(cfg.id or "##tabs", cfg.flags or 0) then
         if fn then fn(self) end
-    end
-    return self
-end
-
--- ── Tab Bar  (fluent tab DSL)
-
-function Element:Tabs(id, fn)
-    if ImGui.BeginTabBar(id or "##tabs") then
-        local TabCtx = setmetatable({ _win = self._win }, Element)
-        function TabCtx:Tab(label, tab_fn)
-            if ImGui.BeginTabItem(label) then
-                if tab_fn then tab_fn(self) end
-                ImGui.EndTabItem()
-            end
-            return self
-        end
-        if fn then fn(TabCtx) end
         ImGui.EndTabBar()
     end
     return self
 end
 
--- ── Table  (simple data table)
+function Element:TabItem(cfg, fn)
+    if type(cfg) == "string" then cfg = { label = cfg } end
+    fn = fn or cfg.OnRender
+    local open, visible = ImGui.BeginTabItem(cfg.label or cfg[1] or "Tab", cfg.flags or 0)
+    if visible then
+        if fn then fn(self) end
+        ImGui.EndTabItem()
+    end
+    return self
+end
+
+-- ── Table
 
 function Element:Table(cfg)
-    -- cfg: { id, columns={...}, rows={{...},...}, flags }
-    local cols = cfg.columns or cfg.cols or {}
-    if #cols == 0 then return self end
-    if ImGui.BeginTable(cfg.id or "##tbl", #cols, cfg.flags or 0) then
+    if type(cfg) == "string" then cfg = { id = cfg } end
+    local cols = cfg.columns or {}
+    if ImGui.BeginTable(cfg.id or "##table", #cols, cfg.flags or 0) then
         for _, c in ipairs(cols) do ImGui.TableSetupColumn(c) end
         ImGui.TableHeadersRow()
         if cfg.rows then
