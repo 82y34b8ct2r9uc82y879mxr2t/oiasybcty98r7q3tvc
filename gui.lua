@@ -766,12 +766,6 @@ local Window = setmetatable({}, { __index = Element })
 Window.__index = Window
 
 function Window:Render()
-    -- Apply theme
-    local nc, nv = 0, 0
-    if self._theme then
-        nc, nv = applyTheme(self._theme)
-    end
-
     -- Set initial size/pos (once)
     if not self._sized then
         self._sized = true
@@ -787,16 +781,25 @@ function Window:Render()
     end
 
     if ImGui.Begin(self._title, self._flags or 0) then
-        if self._onrender then self._onrender(self) end
+        -- Apply theme INSIDE the window
+        local nc, nv = 0, 0
+        if self._theme then
+            nc, nv = applyTheme(self._theme)
+        end
+        
+        -- Render content
+        if self._onrender then 
+            self._onrender(self) 
+        end
+        
+        -- Pop theme BEFORE End
+        if nv > 0 then ImGui.PopStyleVar(nv) end
+        if nc > 0 then ImGui.PopStyleColor(nc) end
     end
     ImGui.End()
 
     -- Notifications overlay
     self:_renderNotifs()
-
-    -- Pop theme
-    if nv > 0 then ImGui.PopStyleVar(nv) end
-    if nc > 0 then ImGui.PopStyleColor(nc) end
 end
 
 function Window:_renderNotifs()
